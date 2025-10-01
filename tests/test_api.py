@@ -15,39 +15,7 @@ def test_db_path(tmp_path_factory):
     return str(tmp_path_factory.mktemp("data") / "test_api.db")
 
 
-class TransactionalConnection:
-    """A connection wrapper that prevents commits for test isolation."""
-    
-    def __init__(self, real_conn):
-        self.real_conn = real_conn
-    
-    def commit(self):
-        # Don't commit during tests
-        pass
-    
-    def rollback(self):
-        return self.real_conn.rollback()
-    
-    def execute(self, sql, *args, **kwargs):
-        return self.real_conn.execute(sql, *args, **kwargs)
-    
-    def executemany(self, sql, *args, **kwargs):
-        return self.real_conn.executemany(sql, *args, **kwargs)
-    
-    def close(self):
-        # Don't close the real connection
-        pass
-    
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        # Don't commit on context exit
-        pass
-    
-    def __getattr__(self, name):
-        # Delegate other attributes to the real connection
-        return getattr(self.real_conn, name)
+
 
 
 @contextmanager

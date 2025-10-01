@@ -4,10 +4,9 @@ import json
 import os
 import tempfile
 import pytest
-import sqlite3
-from contextlib import contextmanager
 
 from petcache import PetCache
+from .test_utils import transactional_cache
 
 
 @pytest.fixture(scope="session")
@@ -16,96 +15,10 @@ def test_db_path(tmp_path_factory):
     return str(tmp_path_factory.mktemp("data") / "test_cache.db")
 
 
-class TransactionalConnection:
-    """A connection wrapper that prevents commits and enables rollback."""
-    
-    def __init__(self, real_conn):
-        self.real_conn = real_conn
-        self._in_transaction = True
-        
-    def execute(self, sql, *args, **kwargs):
-        return self.real_conn.execute(sql, *args, **kwargs)
-    
-    def commit(self):
-        # Prevent commits during test - we'll rollback at the end
-        pass
-    
-    def rollback(self):
-        return self.real_conn.rollback()
-    
-    def close(self):
-        return self.real_conn.close()
-    
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        # Don't commit on context exit
-        pass
-    
-    def __getattr__(self, name):
-        # Delegate other attributes to the real connection
-        return getattr(self.real_conn, name)
-
-
-@contextmanager
-def transactional_cache(db_path):
-    """Context manager that provides a cache with transactional isolation.
-    
-    Similar to Django's transaction.atomic(), this ensures each test
-    runs in its own transaction that gets rolled back at the end.
-    """
-    # Initialize database schema first
-    init_conn = sqlite3.connect(db_path)
-    try:
-        init_conn.execute("""
-            CREATE TABLE IF NOT EXISTS cache (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            )
-        """)
-        init_conn.commit()
-    finally:
-        init_conn.close()
-    
-    # Set up the transactional connection
-    real_conn = sqlite3.connect(db_path)
-    real_conn.execute("BEGIN")
-    
-    # Create a transactional wrapper
-    trans_conn = TransactionalConnection(real_conn)
-    
-    # Temporarily replace sqlite3.connect to return our transactional connection
-    original_connect = sqlite3.connect
-    
-    def transactional_connect(path, *args, **kwargs):
-        if path == db_path:
-            return trans_conn
-        # For other paths, create a properly managed connection
-        conn = original_connect(path, *args, **kwargs)
-        return conn
-    
-    sqlite3.connect = transactional_connect
-    
-    try:
-        # Create cache after patching sqlite3.connect
-        cache = PetCache(db_path=db_path)
-        yield cache
-    finally:
-        # Always rollback to ensure test isolation
-        try:
-            real_conn.rollback()
-        except sqlite3.OperationalError:
-            pass  # Transaction might not be active
-        real_conn.close()
-        # Restore original connect function
-        sqlite3.connect = original_connect
-
-
 @pytest.fixture
 def cache(test_db_path):
     """Create a cache instance with transactional isolation."""
-    with transactional_cache(test_db_path) as cache_instance:
+    with transactional_cache(test_db_path, PetCache) as cache_instance:
         yield cache_instance
 
 

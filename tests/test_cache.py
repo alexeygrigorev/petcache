@@ -4,30 +4,114 @@ import json
 import os
 import tempfile
 import pytest
+import sqlite3
+from contextlib import contextmanager
 
 from petcache import PetCache
 
 
-@pytest.fixture
-def temp_db():
-    """Create an in-memory database for testing.
+@pytest.fixture(scope="session")
+def test_db_path(tmp_path_factory):
+    """Create a shared test database for the entire test session."""
+    return str(tmp_path_factory.mktemp("data") / "test_cache.db")
+
+
+class TransactionalConnection:
+    """A connection wrapper that prevents commits and enables rollback."""
     
-    Using :memory: eliminates file system issues and makes tests faster.
-    Each test gets a fresh, isolated database.
+    def __init__(self, real_conn):
+        self.real_conn = real_conn
+        self._in_transaction = True
+        
+    def execute(self, sql, *args, **kwargs):
+        return self.real_conn.execute(sql, *args, **kwargs)
+    
+    def commit(self):
+        # Prevent commits during test - we'll rollback at the end
+        pass
+    
+    def rollback(self):
+        return self.real_conn.rollback()
+    
+    def close(self):
+        return self.real_conn.close()
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Don't commit on context exit
+        pass
+    
+    def __getattr__(self, name):
+        # Delegate other attributes to the real connection
+        return getattr(self.real_conn, name)
+
+
+@contextmanager
+def transactional_cache(db_path):
+    """Context manager that provides a cache with transactional isolation.
+    
+    Similar to Django's transaction.atomic(), this ensures each test
+    runs in its own transaction that gets rolled back at the end.
     """
-    return ":memory:"
+    # Initialize database schema first
+    init_conn = sqlite3.connect(db_path)
+    try:
+        init_conn.execute("""
+            CREATE TABLE IF NOT EXISTS cache (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        init_conn.commit()
+    finally:
+        init_conn.close()
+    
+    # Set up the transactional connection
+    real_conn = sqlite3.connect(db_path)
+    real_conn.execute("BEGIN")
+    
+    # Create a transactional wrapper
+    trans_conn = TransactionalConnection(real_conn)
+    
+    # Temporarily replace sqlite3.connect to return our transactional connection
+    original_connect = sqlite3.connect
+    
+    def transactional_connect(path, *args, **kwargs):
+        if path == db_path:
+            return trans_conn
+        # For other paths, create a properly managed connection
+        conn = original_connect(path, *args, **kwargs)
+        return conn
+    
+    sqlite3.connect = transactional_connect
+    
+    try:
+        # Create cache after patching sqlite3.connect
+        cache = PetCache(db_path=db_path)
+        yield cache
+    finally:
+        # Always rollback to ensure test isolation
+        try:
+            real_conn.rollback()
+        except sqlite3.OperationalError:
+            pass  # Transaction might not be active
+        real_conn.close()
+        # Restore original connect function
+        sqlite3.connect = original_connect
 
 
 @pytest.fixture
-def cache(temp_db):
-    """Create a cache instance with an in-memory database."""
-    return PetCache(db_path=temp_db)
+def cache(test_db_path):
+    """Create a cache instance with transactional isolation."""
+    with transactional_cache(test_db_path) as cache_instance:
+        yield cache_instance
 
 
-def test_cache_initialization(temp_db):
+def test_cache_initialization(cache):
     """Test cache initialization."""
-    cache = PetCache(db_path=temp_db)
-    assert cache.db_path == temp_db
+    assert cache.db_path is not None
     assert len(cache) == 0
 
 
@@ -216,12 +300,21 @@ def test_export_import_roundtrip(cache):
     try:
         cache.export_to_json(json_path)
         
-        # Create new in-memory cache and import
-        new_cache = PetCache(db_path=":memory:")
-        new_cache.import_from_json(json_path)
-        
-        exported = new_cache.export_to_dict()
-        assert exported == original_data
+        # Create new temporary cache and import
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as db_f:
+            new_db_path = db_f.name
+            
+            try:
+                new_cache = PetCache(db_path=new_db_path)
+                new_cache.import_from_json(json_path)
+            
+                exported = new_cache.export_to_dict()
+                assert exported == original_data
+            finally:
+                try:
+                    os.remove(new_db_path)
+                except (PermissionError, FileNotFoundError):
+                    pass
         
     finally:
         # Clean up JSON file

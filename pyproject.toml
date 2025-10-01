@@ -27,6 +27,7 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --cov=petcache --cov-report=term-missing"
 
+
 [tool.coverage.run]
 source = ["petcache"]
 omit = ["tests/*"]

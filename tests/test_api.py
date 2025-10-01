@@ -1,33 +1,98 @@
 """Tests for the FastAPI application."""
 
-import os
 import pytest
+import sqlite3
+from contextlib import contextmanager
 from fastapi.testclient import TestClient
 
 from petcache.api import create_app
 from petcache.cache import PetCache
 
 
-@pytest.fixture
-def test_db_path():
-    """Create an in-memory database for testing.
+@pytest.fixture(scope="session")
+def test_db_path(tmp_path_factory):
+    """Create a shared test database for the entire test session."""
+    return str(tmp_path_factory.mktemp("data") / "test_api.db")
+
+
+class TransactionalConnection:
+    """A connection wrapper that prevents commits for test isolation."""
     
-    Using :memory: eliminates file system issues and makes tests faster.
-    Each test gets a fresh, isolated database.
-    """
-    return ":memory:"
+    def __init__(self, real_conn):
+        self.real_conn = real_conn
+    
+    def commit(self):
+        # Don't commit during tests
+        pass
+    
+    def rollback(self):
+        return self.real_conn.rollback()
+    
+    def execute(self, sql, *args, **kwargs):
+        return self.real_conn.execute(sql, *args, **kwargs)
+    
+    def executemany(self, sql, *args, **kwargs):
+        return self.real_conn.executemany(sql, *args, **kwargs)
+    
+    def close(self):
+        # Don't close the real connection
+        pass
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Don't commit on context exit
+        pass
+    
+    def __getattr__(self, name):
+        # Delegate other attributes to the real connection
+        return getattr(self.real_conn, name)
+
+
+@contextmanager
+def transactional_app(db_path):
+    """Context manager that provides a FastAPI app with database cleanup."""
+    # Initialize database schema
+    init_conn = sqlite3.connect(db_path)
+    try:
+        init_conn.execute("""
+            CREATE TABLE IF NOT EXISTS cache (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        init_conn.commit()
+    finally:
+        init_conn.close()
+    
+    # Create the app
+    app = create_app(db_path=db_path)
+    
+    try:
+        yield app
+    finally:
+        # Clean up database after test
+        cleanup_conn = sqlite3.connect(db_path)
+        try:
+            cleanup_conn.execute("DELETE FROM cache")
+            cleanup_conn.commit()
+        finally:
+            cleanup_conn.close()
 
 
 @pytest.fixture
 def app_instance(test_db_path):
-    """Create a test app instance with temporary database."""
-    return create_app(db_path=test_db_path)
+    """Create a test app instance with transactional isolation."""
+    with transactional_app(test_db_path) as app:
+        yield app
 
 
 @pytest.fixture
 def cache_instance(test_db_path):
     """Create a cache instance for testing."""
-    return PetCache(db_path=test_db_path)
+    with transactional_app(test_db_path):
+        yield PetCache(db_path=test_db_path)
 
 
 @pytest.fixture
@@ -235,8 +300,4 @@ def test_empty_value_api(client):
     assert response.json()["value"] == ""
 
 
-# Cleanup at module level
-def teardown_module():
-    """Clean up test database."""
-    if os.path.exists(test_db_path):
-        os.remove(test_db_path)
+# No cleanup needed - transactions handle isolation

@@ -192,8 +192,7 @@ class PetCache:
         """Explicitly close any cached connections (for compatibility)."""
         # SQLite connections are automatically closed with context managers
         # This method is provided for explicit cleanup if needed
-        import gc
-        gc.collect()
+        pass
     
     def __del__(self) -> None:
         """Cleanup when the object is destroyed."""

@@ -9,16 +9,11 @@ from petcache import PetCache
 from .test_utils import transactional_cache
 
 
-@pytest.fixture(scope="session")
-def test_db_path(tmp_path_factory):
-    """Create a shared test database for the entire test session."""
-    return str(tmp_path_factory.mktemp("data") / "test_cache.db")
-
-
 @pytest.fixture
-def cache(test_db_path):
+def cache(tmp_path_factory):
     """Create a cache instance with transactional isolation."""
-    with transactional_cache(test_db_path, PetCache) as cache_instance:
+    db_path = str(tmp_path_factory.mktemp("data") / "test_cache.db")
+    with transactional_cache(db_path) as cache_instance:
         yield cache_instance
 
 

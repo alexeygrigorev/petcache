@@ -15,9 +15,6 @@ def test_db_path(tmp_path_factory):
     return str(tmp_path_factory.mktemp("data") / "test_api.db")
 
 
-
-
-
 @contextmanager
 def transactional_app(db_path):
     """Context manager that provides a FastAPI app with database cleanup."""

@@ -3,6 +3,8 @@
 import sqlite3
 from contextlib import contextmanager
 
+from petcache import PetCache
+
 
 class TransactionalConnection:
     """A connection wrapper that prevents commits and enables rollback.
@@ -45,7 +47,7 @@ class TransactionalConnection:
 
 
 @contextmanager
-def transactional_cache(db_path, cache_class):
+def transactional_cache(db_path, cache_class=PetCache):
     """Context manager that provides a cache with transactional isolation.
     
     Similar to Django's transaction.atomic(), this ensures each test

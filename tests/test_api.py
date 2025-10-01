@@ -1,33 +1,39 @@
 """Tests for the FastAPI application."""
 
 import os
-import tempfile
 import pytest
 from fastapi.testclient import TestClient
 
-# Set up a test database before importing the app
-test_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-test_db_path = test_db.name
-test_db.close()
-os.environ["PETCACHE_DB_PATH"] = test_db_path
-
-from petcache.api import app, cache
+from petcache.api import create_app
+from petcache.cache import PetCache
 
 
 @pytest.fixture
-def client():
+def test_db_path():
+    """Create an in-memory database for testing.
+    
+    Using :memory: eliminates file system issues and makes tests faster.
+    Each test gets a fresh, isolated database.
+    """
+    return ":memory:"
+
+
+@pytest.fixture
+def app_instance(test_db_path):
+    """Create a test app instance with temporary database."""
+    return create_app(db_path=test_db_path)
+
+
+@pytest.fixture
+def cache_instance(test_db_path):
+    """Create a cache instance for testing."""
+    return PetCache(db_path=test_db_path)
+
+
+@pytest.fixture
+def client(app_instance):
     """Create a test client."""
-    # Clear the cache before each test
-    cache.clear()
-    return TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def cleanup():
-    """Clean up after tests."""
-    yield
-    # Clean up after each test
-    cache.clear()
+    return TestClient(app_instance)
 
 
 def test_root_endpoint(client):

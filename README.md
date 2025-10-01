@@ -83,14 +83,11 @@ cache.import_from_dict(data, clear_first=True)
 Start the API server:
 
 ```bash
-# Using make
-make run
-
-# Or directly with uvicorn
-uvicorn petcache.api:app --reload
+python -m petcache
+python -m petcache --help
 ```
 
-The API will be available at `http://localhost:8000`
+The API will be available at `http://localhost:8909` (or your specified port)
 
 #### API Endpoints
 
@@ -138,18 +135,6 @@ cd petcache
 make install
 ```
 
-### Available Commands
-
-```bash
-make help          # Show all available commands
-make install       # Install dependencies
-make test          # Run tests
-make test-cov      # Run tests with coverage report
-make run           # Run the FastAPI application
-make dev           # Run in development mode (0.0.0.0:8000)
-make clean         # Clean up generated files
-make example       # Run example script
-```
 
 ### Running Tests
 
@@ -164,6 +149,84 @@ make test-cov
 uv run pytest tests/test_cache.py -v
 ```
 
+## Running as a Server
+
+### Using `python -m petcache`
+
+You can run `petcache` as a server using the module interface. Here are various usage examples:
+
+1. Basic Server (Default Settings)
+
+```bash
+python -m petcache
+# Runs on 0.0.0.0:8909 with petcache.db
+```
+
+2. Custom Host and Port
+
+```bash
+python -m petcache --host localhost --port 9000
+# Runs on localhost:9000
+```
+
+3. Custom Database Path
+
+```bash
+python -m petcache --db-path ./data/my_cache.db
+# Uses custom database file
+```
+
+4. Development Mode with Auto-reload
+
+```bash
+python -m petcache --reload
+# Automatically reloads on code changes
+```
+
+5. Full Configuration
+
+```bash
+python -m petcache --host 0.0.0.0 --port 8080 --db-path /path/to/cache.db --reload
+# Complete custom setup
+```
+
+6. Get Help
+
+```bash
+python -m petcache --help
+# Shows all available options
+```
+
+The server will start and display:
+```
+Starting petcache server...
+Host: 0.0.0.0
+Port: 8909
+Database: /path/to/petcache.db
+API docs: http://0.0.0.0:8909/docs
+```
+
+### Using Docker
+
+#### Docker Examples
+
+**Build and run with Docker:**
+```bash
+# Build the image
+docker build -t petcache .
+
+# Run with volume mapping for database persistence
+docker run -p 8909:8909 -v $(pwd)/data:/app/data petcache
+
+# Run with custom port mapping
+docker run -p 8080:8909 -v $(pwd)/data:/app/data petcache
+
+# Run in detached mode
+docker run -d -p 8909:8909 -v $(pwd)/data:/app/data --name petcache-server petcache
+```
+
+The Docker setup automatically maps the `./data` directory for database persistence.
+
 ## Configuration
 
 ### Database Path
@@ -174,16 +237,27 @@ By default, `petcache` uses `petcache.db` in the current directory. You can spec
 cache = PetCache("path/to/my/cache.db")
 ```
 
-For the API server, set the `PETCACHE_DB_PATH` environment variable:
+When running as a server:
+- Use the `--db-path` argument: `python -m petcache --db-path /path/to/cache.db`
+- Or set the `PETCACHE_DB_PATH` environment variable
+- Docker containers use `/app/data/petcache.db` by default
+
+## Examples
+
+Check out the `examples/` directory for complete examples:
+
+- `examples/example.py` - Basic Python API usage
+
+Run the example:
 
 ```bash
-export PETCACHE_DB_PATH=/path/to/cache.db
-uvicorn petcache.api:app
+# Basic Python API example
+python examples/example.py
 ```
 
 ## Use Cases
 
-- **Content Caching**: Cache API responses, web scraping results, or processed data
+- **Content Caching**: Cache API responses, web scraping results, or processed data, e.g. for [ai-data-pipelines](https://github.com/alexeygrigorev/ai-data-pipelines/)
 - **Configuration Storage**: Store app configuration or user preferences
 - **File Content Cache**: Cache file contents by filename for quick access
 - **Development**: Store test data or fixtures
@@ -195,24 +269,3 @@ uvicorn petcache.api:app
 - SQLite (included with Python)
 - FastAPI (for API server)
 - uvicorn (for API server)
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## Acknowledgments
-
-Built with:
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern web framework
-- [uv](https://github.com/astral-sh/uv) - Fast Python package manager
-- SQLite - Reliable embedded database

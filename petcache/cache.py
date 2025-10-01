@@ -2,7 +2,6 @@
 
 import json
 import sqlite3
-from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 
 
@@ -188,3 +187,17 @@ class PetCache:
     def __repr__(self) -> str:
         """Return a string representation of the cache."""
         return f"PetCache(db_path='{self.db_path}', entries={len(self)})"
+    
+    def close(self) -> None:
+        """Explicitly close any cached connections (for compatibility)."""
+        # SQLite connections are automatically closed with context managers
+        # This method is provided for explicit cleanup if needed
+        import gc
+        gc.collect()
+    
+    def __del__(self) -> None:
+        """Cleanup when the object is destroyed."""
+        try:
+            self.close()
+        except Exception:
+            pass  # Ignore errors during cleanup

@@ -4,25 +4,23 @@ import json
 import os
 import tempfile
 import pytest
-from pathlib import Path
 
 from petcache import PetCache
 
 
 @pytest.fixture
 def temp_db():
-    """Create a temporary database for testing."""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = f.name
-    yield db_path
-    # Cleanup
-    if os.path.exists(db_path):
-        os.remove(db_path)
+    """Create an in-memory database for testing.
+    
+    Using :memory: eliminates file system issues and makes tests faster.
+    Each test gets a fresh, isolated database.
+    """
+    return ":memory:"
 
 
 @pytest.fixture
 def cache(temp_db):
-    """Create a cache instance with a temporary database."""
+    """Create a cache instance with an in-memory database."""
     return PetCache(db_path=temp_db)
 
 
@@ -218,16 +216,19 @@ def test_export_import_roundtrip(cache):
     try:
         cache.export_to_json(json_path)
         
-        # Create new cache and import
-        new_cache = PetCache(db_path=cache.db_path + ".new")
+        # Create new in-memory cache and import
+        new_cache = PetCache(db_path=":memory:")
         new_cache.import_from_json(json_path)
         
         exported = new_cache.export_to_dict()
         assert exported == original_data
+        
     finally:
-        os.remove(json_path)
-        if os.path.exists(cache.db_path + ".new"):
-            os.remove(cache.db_path + ".new")
+        # Clean up JSON file
+        try:
+            os.remove(json_path)
+        except (PermissionError, FileNotFoundError):
+            pass
 
 
 def test_repr(cache):

@@ -9,11 +9,11 @@ dependencies = [
     "uvicorn[standard]>=0.24.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
-    "httpx>=0.25.0",
+    "httpx>=0.28.1",
+    "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
 ]
 
 [build-system]
@@ -39,3 +39,4 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
 ]
+

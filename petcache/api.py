@@ -7,6 +7,7 @@ from typing import Dict
 import os
 
 from .cache import PetCache
+from .__version__ import __version__
 
 
 class CacheItem(BaseModel):
@@ -45,7 +46,7 @@ def create_app(db_path: str = None) -> FastAPI:
     app = FastAPI(
         title="petcache",
         description="Simple persistent cache for texts for your pet projects",
-        version="0.1.0"
+        version=__version__,
     )
 
     @app.get("/")
@@ -53,7 +54,7 @@ def create_app(db_path: str = None) -> FastAPI:
         """Root endpoint."""
         return {
             "message": "petcache API",
-            "version": "0.1.0",
+            "version": __version__,
             "endpoints": {
                 "get": "GET /cache/{key}",
                 "set": "POST /cache",

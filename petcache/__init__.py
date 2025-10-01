@@ -1,6 +1,2 @@
-"""petcache: Simple persistent cache for texts for your pet projects."""
-
-from .cache import PetCache
-
-__version__ = "0.1.0"
-__all__ = ["PetCache"]
+from petcache.cache import PetCache
+from petcache.__version__ import __version__

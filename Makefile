@@ -18,3 +18,16 @@ run:  ## Run the petcache server (recommended way)
 
 dev:  ## Run in development mode with auto-reload
 	uv run python -m petcache --reload
+
+publish-build:  ## Build the package
+	uv run hatch build
+
+publish-test: ## Publish the package to TestPyPI
+	uv run hatch publish --repo test
+
+publish: ## Publish the package to PyPI
+	uv run hatch publish
+
+publish-clean: ## Clean the build artifacts and publish the package to PyPI
+	rm -rf dist/ build/ *.egg-info
+
